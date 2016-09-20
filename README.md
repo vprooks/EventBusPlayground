@@ -31,3 +31,5 @@ Thanks to the authors of the following articles that helped me to find the perfe
 
 [Peer-to-Many Communication in Akka](https://danielasfregola.com/2015/04/20/peer-to-many-communication-in-akka/)
 
+[How to use stackable trait pattern with Akka actors?](https://stackoverflow.com/questions/18124643/how-to-use-stackable-trait-pattern-with-akka-actors)
+

@@ -1,59 +1,50 @@
 package core
 
-import akka.actor.{Actor, Cancellable, Props}
-import akka.event.Logging
+import akka.actor.{Cancellable, Props}
 import core.eventBus.SubchannelBusImpl
+import core.eventBus.SubchannelBusImpl.ControlMessages._
+import core.eventBus.SubchannelBusImpl.TopicType
+import core.eventBus.SubchannelBusImpl.TopicType._
 
 import scala.concurrent.duration._
 
-class CameraActor(outputTopic: String, controlTopic: String, bus: SubchannelBusImpl) extends Actor {
-  val log = Logging(context.system, this)
-
-  override def preStart(): Unit = {
-    log.debug(s"$controlTopic $outputTopic")
-    bus.subscribe(self, controlTopic)
-  }
-
+class CameraActor(topics: Map[TopicType, String], bus: SubchannelBusImpl) extends ActorBase {
   var scheduler: Cancellable = _
 
   def receive = idle
 
   import context._
 
-  @scala.throws[Exception](classOf[Exception])
-  def idle: Receive = {
-    case "enable" =>
-      log.info(s"enable @ $controlTopic")
-      become(active)
+  override def preStart() = {
+    // Subscribe to control topic only
+    log.info(s"subscribe to ${topics(Control)}")
+    bus.subscribe(self, (Control, topics(Control)))
+  }
+
+  private def idleBehavior: Receive = {
+    case (Control, Enable) =>
+      log.info(s"enable @ ${topics(Control)}")
       system.scheduler.schedule(
         1 milliseconds,
         33 milliseconds,
         self,
         "send"
       )
-    case _ =>
-      val msg = "received unrecognized message"
-      log.error(msg)
-      throw new RuntimeException(msg)
+      become(active)
   }
 
-  def active: Receive = {
+  private def activeBehavior: Receive = {
     case "send" =>
-      // TODO: start sending messages, using scheduler maybe
-      log.info(s"publish image to $outputTopic")
-      bus.publish((outputTopic, "image"))
-    case "disable" =>
-      unbecome()
-      log.info("disable")
-      scheduler.cancel()
-    case _ =>
-      val msg = "received unrecognized message"
-      log.error(msg)
-      throw new RuntimeException(msg)
+      log.info(s"publish image to ${topics(Image)}")
+      bus.publish((Image, topics(Image), "image"))
   }
+
+  override def idle: Receive = idleBehavior orElse[Any, Unit] super.idle
+
+  override def active: Receive = activeBehavior orElse[Any, Unit] super.active
 }
 
 object CameraActor {
-  def props(outputTopic: String, controlTopic: String, bus: SubchannelBusImpl) =
-    Props(new CameraActor(outputTopic, controlTopic, bus))
+  def props(topics: Map[TopicType, String], bus: SubchannelBusImpl) =
+    Props(new CameraActor(topics, bus))
 }
