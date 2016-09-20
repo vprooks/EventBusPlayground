@@ -1,37 +1,29 @@
 package core
 
-import akka.actor.{Actor, Props}
-import akka.event.Logging
+import akka.actor.Props
 import core.eventBus.SubchannelBusImpl
+import core.eventBus.SubchannelBusImpl.TopicType
+import core.eventBus.SubchannelBusImpl.TopicType.Image
 
-class VisActor(inputTopic: String, controlTopic: String, bus: SubchannelBusImpl) extends Actor {
-  val log = Logging(context.system, this)
-
-  override def preStart(): Unit = {
-    bus.subscribe(self, inputTopic)
-    bus.subscribe(self, controlTopic)
-  }
-
+class VisActor(topics: Map[TopicType, String], bus: SubchannelBusImpl) extends ActorBase {
   def receive = idle
 
-  import context._
-
-  def idle: Receive = {
-    case "enable" =>
-      become(active)
-      log.info("become active")
+  override def preStart() = {
+    topics map (topic => {
+      log.info(s"subscribe to $topic")
+      bus.subscribe(self, topic)
+    })
   }
 
-  def active: Receive = {
-    case "image" =>
-      log.info("show image")
-    case "disable" =>
-      log.info("disable")
-      unbecome()
+  private def activeBehavior: Receive = {
+    case (Image, "image") =>
+      log.info(s"vis image from ${topics(Image)}")
   }
+
+  override def active: Receive = activeBehavior orElse[Any, Unit] super.active
 }
 
 object VisActor {
-  def props(inputTopic: String, controlTopic: String, bus: SubchannelBusImpl) =
-    Props(new VisActor(inputTopic, controlTopic, bus))
+  def props(topics: Map[TopicType, String], bus: SubchannelBusImpl) =
+    Props(new VisActor(topics, bus))
 }
